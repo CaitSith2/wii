@@ -26,8 +26,14 @@ static u8 key[16];
 static const u8 *map_rom(const char *name)
 {
 	int fd = open(name, O_RDONLY);
-	void *map = mmap(0, 0x20000000, PROT_READ, MAP_SHARED, fd, 0);
+  printf("Opening nand dump\n");
+  if(fd<0)
+    fatal("Could not open nand dump %s",name);
+  printf("result = %x, %d", fd, fd);
+	void *map = mmap(0, 0x21000400, PROT_READ, MAP_SHARED, fd, 0);
 	close(fd);
+  if(map==NULL)
+    fatal("Could not allocate memory for nand dump %s",name);
 	return map;
 }
 
@@ -196,19 +202,19 @@ void print_help()
 {
   printf("usage: zestig [options] nandfilename\n");
 	printf("Valid options:\n");
-	printf("  -n, --name=NAME    Load wii-specific keys from ~/.wii/NAME\n");
-	printf("  -O OTP             Load keys from the given OTP dump instead of using ~/.wii/\n");
-  printf("  -N                 Load keys from nand dump instead of using ~/.wii/\n");
-  printf("  -o --oob           Use out of band (extra data) if it exists\n");
-	printf("  -v, --verbose      Increase verbosity, can be specified multiple times\n");
+	printf("  --name=NAME    Load wii-specific keys from ~/.wii/NAME\n");
+	printf("  --otp=NAME     Load keys from the given OTP dump instead of using ~/.wii/\n");
+  printf("  --nandotp      Load keys from nand dump instead of using ~/.wii/\n");
+  printf("  --oob          Use out of band (extra data) if it exists\n");
+	printf("  --verbose      Increase verbosity, can be specified multiple times\n");
 	printf("\n");
-	printf("  -h, --help         Display this help and exit\n");
-	printf("  -V, --version      Print version and exit\n");
+	printf("  --help         Display this help and exit\n");
+	printf("  --version      Print version and exit\n");
 }
 
 int main(int argc, char **argv)
 {
-  char *otp = NULL;
+  char otp[256] = {0};;
   char nandotp = 0;
 	printf("zestig\n\n");
 
@@ -218,8 +224,8 @@ int main(int argc, char **argv)
 		{ "help", no_argument, 0, 'h' },
 		{ "version", no_argument, 0, 'V' },
 		{ "name", required_argument, 0, 'n' },
-    { "oob", no_argument, 0, 'e' },
-		{ "otp", required_argument, 0, 'o' },
+    { "oob", no_argument, 0, 'o' },
+		{ "otp", required_argument, 0, 'O' },
     { "nandotp", no_argument, 0, 'N' },
 		{ "verbose", no_argument, 0, 'v' },
 		{ 0, 0, 0, 0 }
@@ -234,7 +240,7 @@ int main(int argc, char **argv)
 	int optionindex;
   
 	while(c >= 0) {
-		c = my_getopt_long(argc, argv, "-NOVehvno:", wiifsck_options, &optionindex);
+		c = my_getopt_long_only(argc, argv, "-:", wiifsck_options, &optionindex);
 		switch (c) {
 			case 'n':
 				strncpy(wiiname, my_optarg, 255);
@@ -253,7 +259,7 @@ int main(int argc, char **argv)
 				printf("\n");
 				exit(0);
 			case 'O':
-				otp = strdup(my_optarg);
+        printf("%s", my_optarg);
 				break;
       case 'o':
         out_of_band = 1;
@@ -262,16 +268,14 @@ int main(int argc, char **argv)
 				printf("Invalid option -%c. Try -h\n", my_optopt);
 				exit(-1);
 			case 1:
-        printf("Opening nand dump\n");
         rom = map_rom(my_optarg);
 				break;
 		}
 	}
-  
+  printf("Loop exited\n");
   
 	get_key("default/nand-key", key, 16);
-
-	rom = map_rom(argv[1]);
+  
 	super = find_super();
 	fat = super + 0x0c;
 	fst = fat + 0x10000;
