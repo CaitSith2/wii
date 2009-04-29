@@ -144,7 +144,7 @@ static void do_file(const u8 *entry, const char *parent_path)
 	fclose(fp);
 }
 
-static void do_entry(const u8 *entry, const char *parent_path);
+static void do_entry(const u8 *entry, const char *parent_path, int entry_num);
 
 static void print_dir_entries(const u8 *entry)
 {
@@ -182,10 +182,10 @@ static void do_dir(const u8 *entry, const char *parent_path)
 		mkdir(path + 1, 0777);
 
 	if (sub != 0xffff)
-		do_entry(fst + 0x20*sub, path);
+		do_entry(fst + 0x20*sub, path, sub);
 }
 
-static void do_entry(const u8 *entry, const char *parent_path)
+static void do_entry(const u8 *entry, const char *parent_path, int entry_num)
 {
 	u8 mode;
 	u16 sib;
@@ -194,7 +194,7 @@ static void do_entry(const u8 *entry, const char *parent_path)
 	sib = be16(entry + 0x10);
 
 	if (sib != 0xffff)
-		do_entry(fst + 0x20*sib, parent_path);
+		do_entry(fst + 0x20*sib, parent_path, sib);
 
 	mode &= 3;
 
@@ -310,7 +310,7 @@ int main(int argc, char **argv)
   
 	mkdir(argv[2], 0777);
 	chdir(argv[2]);
-	do_entry(fst, "");
+	do_entry(fst, "", 0);
 	chdir("..");
 
 	return 0;
