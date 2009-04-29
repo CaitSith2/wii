@@ -116,6 +116,7 @@ static void do_file(const u8 *entry, const char *parent_path)
 	u16 sub;
 	u32 size, this_size;
 	FILE *fp;
+  int i;
 
 	memcpy(name, entry, 12);
 	name[12] = 0;
@@ -133,7 +134,17 @@ static void do_file(const u8 *entry, const char *parent_path)
 		this_size = size > 0x4000 ? 0x4000 : size;
 
 		memset(iv, 0, sizeof iv);
-		aes_cbc_dec(key, iv, (u8 *)rom + 0x4000*sub, 0x4000, block);
+    if(out_of_band)
+    {
+      for(i=0;i<8;i++)
+      {
+        aes_cbc_dec(key, iv, (u8 *)rom + 0x4200*sub + 0x840*i, 0x800, block + 0x800*i);
+      }
+    }
+    else
+    {
+		  aes_cbc_dec(key, iv, (u8 *)rom + 0x4000*sub, 0x4000, block);
+    }
 
 		fwrite(block, 1, this_size, fp);
 
