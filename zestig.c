@@ -5,15 +5,23 @@
 #include <fcntl.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "tools.h"
+#include "my_getopt.h"
 
+#define ZESTIG_VERSION_STRING "Zestig v1.0m by CaitSith2, original version by segher\n"
+  
+int verbosity_level;
+int out_of_band = 0;
+  
 static const u8 *rom;
 static const u8 *super;
 static const u8 *fat;
 static const u8 *fst;
 
 static u8 key[16];
+
 
 static const u8 *map_rom(const char *name)
 {
@@ -184,8 +192,83 @@ static void do_entry(const u8 *entry, const char *parent_path)
 	}
 }
 
+void print_help()
+{
+  printf("usage: zestig [options] nandfilename\n");
+	printf("Valid options:\n");
+	printf("  -n, --name=NAME    Load wii-specific keys from ~/.wii/NAME\n");
+	printf("  -O OTP             Load keys from the given OTP dump instead of using ~/.wii/\n");
+  printf("  -N                 Load keys from nand dump instead of using ~/.wii/\n");
+  printf("  -o --oob           Use out of band (extra data) if it exists\n");
+	printf("  -v, --verbose      Increase verbosity, can be specified multiple times\n");
+	printf("\n");
+	printf("  -h, --help         Display this help and exit\n");
+	printf("  -V, --version      Print version and exit\n");
+}
+
 int main(int argc, char **argv)
 {
+  char *otp = NULL;
+  char nandotp = 0;
+	printf("zestig\n\n");
+
+	char wiiname[256] = {0};
+  
+  static const struct option wiifsck_options[] = {
+		{ "help", no_argument, 0, 'h' },
+		{ "version", no_argument, 0, 'V' },
+		{ "name", required_argument, 0, 'n' },
+    { "oob", no_argument, 0, 'e' },
+		{ "otp", required_argument, 0, 'o' },
+    { "nandotp", no_argument, 0, 'N' },
+		{ "verbose", no_argument, 0, 'v' },
+		{ 0, 0, 0, 0 }
+	};
+  if(argc==1)
+  {
+    printf("usage: zestig [options] nandfilename\n");
+    printf("Try -h for more information on [options]\n");
+    exit(0);
+  }
+  int c = 0;
+	int optionindex;
+  
+	while(c >= 0) {
+		c = my_getopt_long(argc, argv, "-NOVehvno:", wiifsck_options, &optionindex);
+		switch (c) {
+			case 'n':
+				strncpy(wiiname, my_optarg, 255);
+				break;
+      case 'N':
+        nandotp = 1;
+        break;
+			case 'v':
+				verbosity_level++;
+				break;
+			case 'h':
+				print_help();
+				exit(0);
+			case 'V':
+				printf(ZESTIG_VERSION_STRING);
+				printf("\n");
+				exit(0);
+			case 'O':
+				otp = strdup(my_optarg);
+				break;
+      case 'o':
+        out_of_band = 1;
+        break;
+			case '?':
+				printf("Invalid option -%c. Try -h\n", my_optopt);
+				exit(-1);
+			case 1:
+        printf("Opening nand dump\n");
+        rom = map_rom(my_optarg);
+				break;
+		}
+	}
+  
+  
 	get_key("default/nand-key", key, 16);
 
 	rom = map_rom(argv[1]);
