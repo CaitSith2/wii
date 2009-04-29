@@ -24,6 +24,7 @@ static const u8 *fat;
 static const u8 *fst;
 
 static u8 key[16];
+static u8 hmac[20];
 
 
 static const u8 *map_rom(const char *name)
@@ -229,6 +230,7 @@ void print_help()
 	printf("  --otp=NAME     Load keys from the given OTP dump instead of using ~/.wii/\n");
   printf("  --nandotp      Load keys from nand dump instead of using ~/.wii/\n");
   printf("  --oob          Use out of band (extra data) if it exists\n");
+  printf("  --out=PATH     Where to store dumped files. Defaults to ./wiiflash/");
 	printf("  --verbose      Increase verbosity, can be specified multiple times\n");
 	printf("\n");
 	printf("  --help         Display this help and exit\n");
@@ -237,19 +239,21 @@ void print_help()
 
 int main(int argc, char **argv)
 {
+  char path[256];
+  char wiiname[256] = {0};
   char otp[256] = {0};
+  char nanddump[256] = {0};
   char nandotp = 0;
   int i;
 	printf("zestig\n\n");
-
-	char wiiname[256] = {0};
-  
+	
   static const struct option wiifsck_options[] = {
 		{ "help", no_argument, 0, 'h' },
 		{ "version", no_argument, 0, 'V' },
 		{ "name", required_argument, 0, 'n' },
     { "oob", no_argument, 0, 'o' },
 		{ "otp", required_argument, 0, 'O' },
+    { "out", required_argument, 0, 'p' },
     { "nandotp", no_argument, 0, 'N' },
 		{ "verbose", no_argument, 0, 'v' },
 		{ 0, 0, 0, 0 }
@@ -288,6 +292,9 @@ int main(int argc, char **argv)
       case 'o':
         out_of_band = 1;
         break;
+      case 'p':
+        strncpy(nanddump,my_optarg,255);
+        break;
 			case '?':
 				printf("Invalid option -%c. Try -h\n", my_optopt);
 				exit(-1);
@@ -301,7 +308,40 @@ int main(int argc, char **argv)
     printf("error: You must specify a nand file to extract\n");
     exit(0);
   }
-	get_key("default/nand-key", key, 16);
+  if(nandotp)
+  {
+    memcpy(key,rom+0x21000158,16);
+    memcpy(hmac,rom+0x21000144,20);  //Why not, its already here.
+  }
+  else if(otp[0] != 0)
+  {
+    int fd = open(otp, O_RDONLY);
+    if(fd<0)
+      fatal("Could not open otp file %s",otp);
+    void *otpdata = mmap(0, 0x100, PROT_READ, MAP_SHARED, fd, 0);
+    if(otpdata==NULL)
+      fatal("Could not allocate memory for otp file %s",otp);
+    close(fd);
+    memcpy(key,otpdata+0x58,16);
+    memcpy(hmac,otpdata+0x44,20);  //Why not, its already here.
+  }
+  else if(wiiname[0]!=0)
+  {
+    sprintf(path,"%s/nand-key",wiiname);
+    get_key(path, key, 16);
+    if(verify_hmac)
+    {
+      sprintf(path,"%s/nand-hmac",wiiname);
+      get_key(path, hmac, 20);
+    }
+  }
+  else
+  {
+    get_key("default/nand-key", key, 16);
+    if(verify_hmac)
+      get_key("default/nand-hmac", hmac, 20);
+  }
+	
   
   
 	super = find_super();
@@ -318,9 +358,16 @@ int main(int argc, char **argv)
   	fat = super + 0x0c;
   }
   	fst = fat + 0x10000;
-  
-	mkdir(argv[2], 0777);
-	chdir(argv[2]);
+  if(nanddump[0]==0)
+  {
+    mkdir("wiiflash",0777);
+    chdir("wiiflash");
+  }
+  else
+  {
+  	mkdir(nanddump, 0777);
+  	chdir(nanddump);
+  }
 	do_entry(fst, "", 0);
 	chdir("..");
 
