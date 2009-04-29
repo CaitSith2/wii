@@ -1,5 +1,5 @@
-PROGS = twintig zestig zeventig tachtig negentig
-PROGS += tpl2ppm dol2elf tmd-dump zelda-cksum
+PROGS = zestig zeventig tachtig negentig tpl2ppm
+PROGS += dol2elf tmd-dump zelda-cksum twintig
 COMMON = tools.o bn.o ec.o ecc.o sha1.o fs_hmac.o my_getopt.o
 DEFINES = -DLARGE_FILES -D_FILE_OFFSET_BITS=64
 LIBS = -lcrypto
