@@ -14,9 +14,12 @@
   
 int verbosity_level;
 int out_of_band = 0;
+int verify_ecc = 0;
+int verify_hmac = 0;
   
 static const u8 *rom;
 static const u8 *super;
+static u8 superblock[0x40000];
 static const u8 *fat;
 static const u8 *fst;
 
@@ -29,7 +32,6 @@ static const u8 *map_rom(const char *name)
   printf("Opening nand dump\n");
   if(fd<0)
     fatal("Could not open nand dump %s",name);
-  printf("result = %x, %d", fd, fd);
 	void *map = mmap(0, 0x21000400, PROT_READ, MAP_SHARED, fd, 0);
 	close(fd);
   if(map==NULL)
@@ -41,8 +43,18 @@ static const u8 *find_super(void)
 {
 	u32 newest = 0;
 	const u8 *super = 0, *p;
+  int start = 0x1fc00000;
+  int end = 0x20000000;
+  int add = 0x40000;
+  
+  if(out_of_band)
+  {
+    start=0x20BE0000;
+    end = 0x21000000;
+    add = 0x42000;
+  }
 
-	for (p = rom + 0x1fc00000; p < rom + 0x20000000; p += 0x40000)
+	for (p = rom + start; p < rom + end; p += add)
 		if (be32(p) == 0x53464653) {
 			u32 version = be32(p + 4);
 			if (super == 0 || version > newest) {
@@ -214,8 +226,9 @@ void print_help()
 
 int main(int argc, char **argv)
 {
-  char otp[256] = {0};;
+  char otp[256] = {0};
   char nandotp = 0;
+  int i;
 	printf("zestig\n\n");
 
 	char wiiname[256] = {0};
@@ -259,7 +272,7 @@ int main(int argc, char **argv)
 				printf("\n");
 				exit(0);
 			case 'O':
-        printf("%s", my_optarg);
+        strncpy(otp, my_optarg, 255);
 				break;
       case 'o':
         out_of_band = 1;
@@ -272,14 +285,29 @@ int main(int argc, char **argv)
 				break;
 		}
 	}
-  printf("Loop exited\n");
-  
+  if(rom==NULL)
+  {
+    printf("error: You must specify a nand file to extract\n");
+    exit(0);
+  }
 	get_key("default/nand-key", key, 16);
   
+  
 	super = find_super();
-	fat = super + 0x0c;
-	fst = fat + 0x10000;
-
+  if(out_of_band)
+  {
+    for(i=0;i<128;i++)
+    {
+      memcpy(superblock+(i*2048),super+(i*2112),2048);
+    }
+    fat = superblock + 0x0c;
+  }
+  else
+  {
+  	fat = super + 0x0c;
+  }
+  	fst = fat + 0x10000;
+  
 	mkdir(argv[2], 0777);
 	chdir(argv[2]);
 	do_entry(fst, "");
