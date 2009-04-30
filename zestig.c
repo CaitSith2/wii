@@ -10,6 +10,7 @@
 #include "tools.h"
 #include "my_getopt.h"
 #include "ecc.h"
+#include "fs_hmac.h"
 
 #define ZESTIG_VERSION_STRING "Zestig v1.0m by CaitSith2, original version by segher\n"
   
@@ -48,6 +49,9 @@ static const u8 *find_super(void)
   int start = 0x1fc00000;
   int end = 0x20000000;
   int add = 0x40000;
+  int i,j;
+  u8 block_hmac[40];
+  u8 hmac_super[20];
   
   if(out_of_band)
   {
@@ -56,15 +60,34 @@ static const u8 *find_super(void)
     add = 0x42000;
   }
 
-	for (p = rom + start; p < rom + end; p += add)
+	for (p = rom + start,j=0; p < rom + end; p += add,j++)
 		if (be32(p) == 0x53464653) {
 			u32 version = be32(p + 4);
 			if (super == 0 || version > newest) {
+        if(out_of_band)
+        {
+          for(i=0;i<128;i++)
+          {
+            memcpy(superblock+(i*2048),p+(i*2112),2048);
+          }
+        }
+        if(verify_hmac)
+        {
+          memcpy(block_hmac,p+add-0x87F,32);
+          memcpy(block_hmac+32,p+add-0x3F,8);
+          fs_hmac_meta(superblock,0x7F00+(0x10*j),hmac_super);
+          if(memcmp(hmac_super,block_hmac,20) && memcmp(hmac_super,block_hmac+20,20))
+          {
+            fprintf(stderr,"Warning: HMAC for superblock %d is invalid. Not using this block\n",j);
+            continue;
+          }
+          else
+            fprintf(stderr,"Super block %d OK\n",j);
+        }
 				super = p;
 				newest = version;
 			}
 		}
-
 	return super;
 }
 
@@ -252,6 +275,7 @@ int main(int argc, char **argv)
 		{ "help", no_argument, 0, 'h' },
 		{ "version", no_argument, 0, 'V' },
     { "ecc", no_argument, 0, 'E' },
+    { "hmac", no_argument, 0, 'H' },
 		{ "name", required_argument, 0, 'n' },
     { "oob", no_argument, 0, 'o' },
 		{ "otp", required_argument, 0, 'O' },
@@ -302,6 +326,9 @@ int main(int argc, char **argv)
 				exit(-1);
       case 'E':
         verify_ecc = 1;
+        break;
+      case 'H':
+        verify_hmac = 1;
         break;
 			case 1:
         rom = map_rom(my_optarg);
@@ -364,14 +391,29 @@ int main(int argc, char **argv)
     }
     fprintf(stderr,"\n");
   }
+  if(verify_hmac)
+  {
+    if(!out_of_band)
+    {
+      fprintf(stderr,"Warning: --oob required to verify hmac.\n");
+      verify_hmac=0;
+    }
+    else
+      fs_hmac_set_key(hmac,20);
+  }
   
 	super = find_super();
+  if(super==NULL)
+  {
+    printf("No valid superblocks found\n");
+    if(out_of_band)
+      printf("Try removing --oob from options\n");
+    else
+      printf("Try adding --oob to options\n");
+    exit(1);
+  }
   if(out_of_band)
   {
-    for(i=0;i<128;i++)
-    {
-      memcpy(superblock+(i*2048),super+(i*2112),2048);
-    }
     fat = superblock + 0x0c;
   }
   else
