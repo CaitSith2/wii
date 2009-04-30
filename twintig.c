@@ -17,6 +17,10 @@ static int verbose = 0;
 #define MAXFILES 1000
 
 #define ERROR(s) do { fprintf(stderr, s "\n"); exit(1); } while (0)
+  
+//Uncomment line if building in cygwin.
+#define ISFILEDIR_WIN32
+
 
 static u8 sd_key[16];
 static u8 sd_iv[16];
@@ -148,6 +152,23 @@ static void do_file_header(u64 title_id)
 		fatal("write header");
 }
 
+#ifdef ISFILEDIR_WIN32
+static int isdir(char *name)
+{
+  if(chdir(name) < 0) return 0;
+  chdir("..");
+  return 1;
+}
+
+static int isfile(char *name)
+{
+  FILE *fp;
+  if((fp=fopen(name,"rb"))==NULL) return 0;
+  fclose(fp);
+  return 1;
+}
+#endif
+
 static void find_files_recursive(const char *path)
 {
 	DIR *dir;
@@ -179,11 +200,18 @@ static void find_files_recursive(const char *path)
 
 		if (len >= sizeof name)
 			ERROR("path too long");
+#ifdef ISFILEDIR_WIN32
+    if(!isfile(de->d_name) && !isdir(de->d_name))
+      ERROR("not a regular file or a directory");
 
+    is_dir = isdir(de->d_name);
+#else
 		if (de->d_type != DT_REG && de->d_type != DT_DIR)
-			ERROR("not a regular file or a directory");
+      ERROR("not a regular file or a directory");
 
-		is_dir = (de->d_type == DT_DIR);
+    is_dir = (de->d_type == DT_DIR);
+#endif
+
 
 		if (is_dir)
 			size = 0;
@@ -204,7 +232,7 @@ static void find_files_recursive(const char *path)
 		size = round_up(size, 0x40);
 		files_size += 0x80 + size;
 
-		if (de->d_type == DT_DIR)
+		if (is_dir)
 			find_files_recursive(name);
 	}
 
