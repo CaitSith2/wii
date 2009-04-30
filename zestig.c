@@ -15,7 +15,7 @@
 
 #define ZESTIG_VERSION_STRING "Zestig v1.1m by CaitSith2, original version by segher\n"
   
-int verbosity_level;
+int verbosity_level = 0;
 int out_of_band = 0;
 int verify_ecc = 0;
 int verify_hmac = 0;
@@ -88,11 +88,11 @@ static const u8 *find_super(void)
           fs_hmac_meta(superblock,0x7F00+(0x10*j),hmac_super);
           if(memcmp(hmac_super,block_hmac,20) && memcmp(hmac_super,block_hmac+20,20))
           {
-            fprintf(stderr,"Warning: HMAC for superblock %d is invalid. Not using this block\n",j);
+            fprintf(stdout,"Warning: HMAC for superblock %d is invalid. Not using this block\n",j);
             continue;
           }
           else
-            fprintf(stderr,"Super block %d OK\n",j);
+            fprintf(stdout,"Super block %d OK\n",j);
         }
 				super = p;
 				newest = version;
@@ -107,10 +107,10 @@ static void print_mode(u8 mode)
 	const char dir[4] = "?-d?";
 	const char perm[3] = "-rw";
 
-	fprintf(stderr, "%c", dir[mode & 3]);
+	fprintf(stdout, "%c", dir[mode & 3]);
 	for (i = 0; i < 3; i++) {
-		fprintf(stderr, "%c", perm[(mode >> 6) & 1]);
-		fprintf(stderr, "%c", perm[(mode >> 6) & 2]);
+		fprintf(stdout, "%c", perm[(mode >> 6) & 1]);
+		fprintf(stdout, "%c", perm[(mode >> 6) & 2]);
 		mode <<= 2;
 	}
 }
@@ -137,7 +137,7 @@ static void print_entry(const u8 *entry)
 	x3 = be32(entry + 0x1c);
 
 	print_mode(mode);
-	fprintf(stderr, " %02x %04x %04x %08x (%04x %08x) %s\n",
+	fprintf(stdout, " %02x %04x %04x %08x (%04x %08x) %s\n",
 	        attr, uid, gid, size, x1, x3, name);
 }
 
@@ -184,7 +184,7 @@ static void do_file(const u8 *entry, const char *parent_path, int entry_num)
         fs_hmac_data(block,be16(entry+0x18),entry,entry_num,be32(entry+0x1C),j++,hmac_data);
         if(memcmp(hmac_data,hmac_block,20) && memcmp(hmac_data,hmac_block+20,20))
         {
-          fprintf(stderr,"Warning: Invalid hmac for this file in cluster %d\n",j);
+          fprintf(stdout,"Warning: Invalid hmac for file %s in cluster %d\n",path,j);
         }
       }
     }
@@ -231,10 +231,10 @@ static void do_dir(const u8 *entry, const char *parent_path)
 		sprintf(path, "%s%s", parent_path, name);
 	else
 		sprintf(path, "%s/%s", parent_path, name);
-	fprintf(stderr, "%s:\n", path);
+	fprintf(stdout, "%s:\n", path);
 	if (sub != 0xffff)
 		print_dir_entries(fst + 0x20*sub);
-	fprintf(stderr, "\n");
+	fprintf(stdout, "\n");
 
 	if (path[1])
 		mkdir(path + 1, 0777);
@@ -264,7 +264,7 @@ static void do_entry(const u8 *entry, const char *parent_path, int entry_num)
 		do_dir(entry, parent_path);
 		break;
 	default:
-		fprintf(stderr, "unknown mode! (%d)\n", mode);
+		fprintf(stdout, "unknown mode! (%d)\n", mode);
 	}
 }
 
@@ -400,20 +400,24 @@ int main(int argc, char **argv)
 	
   if(verify_ecc)
   {
-    for(i=0;i<262144;i++)
+    if(!out_of_band)
     {
-      if(!out_of_band)
-      {
-        fprintf(stderr,"Warning: --oob required to verify ecc.\n");
-        break;
-      }
-      if((i%4096)==4095)
-        fprintf(stderr,".");
-      result=check_ecc((u8*)rom+(i*2112));
-      if(result==-1)
-        fprintf(stderr,"ECC error at page %d\n",i);
+      fprintf(stderr,"Warning: --oob required to verify ecc.\n");
+      verify_ecc = 0;
     }
-    fprintf(stderr,"\n");
+    else
+    {
+      fprintf(stderr,"Verifying ECC data\n");
+      for(i=0;i<262144;i++)
+      {
+        if((i%4096)==4095)
+          fprintf(stderr,".");
+        result=check_ecc((u8*)rom+(i*2112));
+        if(result==-1)
+          fprintf(stderr,"ECC error at page %d\n",i);
+      }
+      fprintf(stderr,"\n");
+    }
   }
   if(verify_hmac)
   {
