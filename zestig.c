@@ -12,7 +12,7 @@
 #include "ecc.h"
 #include "fs_hmac.h"
 
-#define ZESTIG_VERSION_STRING "Zestig v1.0m by CaitSith2, original version by segher\n"
+#define ZESTIG_VERSION_STRING "Zestig v1.1m by CaitSith2, original version by segher\n"
   
 int verbosity_level;
 int out_of_band = 0;
@@ -263,9 +263,11 @@ void print_help()
   printf("usage: zestig [options] nandfilename\n");
 	printf("Valid options:\n");
 	printf("  --name=NAME    Load wii-specific keys from ~/.wii/NAME\n");
-	printf("  --otp=NAME     Load keys from the given OTP dump instead of using ~/.wii/\n");
+	printf("  --otp=OTP      Load keys from the given OTP dump instead of using ~/.wii/\n");
   printf("  --nandotp      Load keys from nand dump instead of using ~/.wii/\n");
   printf("  --oob          Use out of band (extra data) if it exists\n");
+  printf("  --ecc          Verifies ecc data. (Requires --oob)\n");
+  printf("  --hmac         Verifies superblock/file hmac (Requires --oob)\n");
   printf("  --out=PATH     Where to store dumped files. Defaults to ./wiiflash/");
 	printf("  --verbose      Increase verbosity, can be specified multiple times\n");
 	printf("\n");
@@ -299,7 +301,7 @@ int main(int argc, char **argv)
   if(argc==1)
   {
     printf("usage: zestig [options] nandfilename\n");
-    printf("Try -h for more information on [options]\n");
+    printf("Try --help for more information on [options]\n");
     exit(0);
   }
   int c = 0;
@@ -334,7 +336,7 @@ int main(int argc, char **argv)
         strncpy(nanddump,my_optarg,255);
         break;
 			case '?':
-				printf("Invalid option -%c. Try -h\n", my_optopt);
+				printf("Invalid option -%c. Try --help\n", my_optopt);
 				exit(-1);
       case 'E':
         verify_ecc = 1;
