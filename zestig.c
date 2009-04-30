@@ -9,6 +9,7 @@
 
 #include "tools.h"
 #include "my_getopt.h"
+#include "ecc.h"
 
 #define ZESTIG_VERSION_STRING "Zestig v1.0m by CaitSith2, original version by segher\n"
   
@@ -244,12 +245,13 @@ int main(int argc, char **argv)
   char otp[256] = {0};
   char nanddump[256] = {0};
   char nandotp = 0;
-  int i;
+  int i, result;
 	printf("zestig\n\n");
 	
   static const struct option wiifsck_options[] = {
 		{ "help", no_argument, 0, 'h' },
 		{ "version", no_argument, 0, 'V' },
+    { "ecc", no_argument, 0, 'E' },
 		{ "name", required_argument, 0, 'n' },
     { "oob", no_argument, 0, 'o' },
 		{ "otp", required_argument, 0, 'O' },
@@ -298,6 +300,9 @@ int main(int argc, char **argv)
 			case '?':
 				printf("Invalid option -%c. Try -h\n", my_optopt);
 				exit(-1);
+      case 'E':
+        verify_ecc = 1;
+        break;
 			case 1:
         rom = map_rom(my_optarg);
 				break;
@@ -342,7 +347,23 @@ int main(int argc, char **argv)
       get_key("default/nand-hmac", hmac, 20);
   }
 	
-  
+  if(verify_ecc)
+  {
+    for(i=0;i<262144;i++)
+    {
+      if(!out_of_band)
+      {
+        fprintf(stderr,"Warning: --oob required to verify ecc.\n");
+        break;
+      }
+      if((i%4096)==4095)
+        fprintf(stderr,".");
+      result=check_ecc((u8*)rom+(i*2112));
+      if(result==-1)
+        fprintf(stderr,"ECC error at page %d\n",i);
+    }
+    fprintf(stderr,"\n");
+  }
   
 	super = find_super();
   if(out_of_band)

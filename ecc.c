@@ -74,11 +74,10 @@ int check_ecc(u8 *data)
 	calc_ecc(data + 1536, ecc + 12);
 
 	if (memcmp(data + 2048 + 48, ecc, 16)) {
-		fprintf(stderr, "Stored: ");
+		fprintf(stderr, "\nStored: ");
 		hexdump(data + 2048 + 48, 16);
-		fprintf(stderr, "\nCalc: ");
+		fprintf(stderr, "  Calc: ");
 		hexdump(ecc, 16);
-		fprintf(stderr, "\n");
 		return -1; // ECC incorrect
 	}
 	return 0; // ECC correct
