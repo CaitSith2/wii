@@ -6,6 +6,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <malloc.h>
 
 #include "tools.h"
 #include "my_getopt.h"
@@ -31,14 +32,23 @@ static u8 hmac[20];
 
 static const u8 *map_rom(const char *name)
 {
-	int fd = open(name, O_RDONLY);
-  printf("Opening nand dump\n");
-  if(fd<0)
+  int i;
+  fprintf(stderr,"Opening nand dump\n");
+  FILE *fd = fopen(name,"rb");
+  if(fd==NULL)
     fatal("Could not open nand dump %s",name);
-	void *map = mmap(0, 0x21000400, PROT_READ, MAP_SHARED, fd, 0);
-	close(fd);
+	void *map = malloc(0x21000400);
   if(map==NULL)
     fatal("Could not allocate memory for nand dump %s",name);
+  fprintf(stderr,"reading nand dump\n");
+  for(i=0;i<64;i++)
+  {
+    if(fread(map+i*0x840010,0x840010,1,fd)!=1)
+      break;
+    fprintf(stderr,".");
+  }
+	fclose(fd);
+  fprintf(stderr,"\n");
 	return map;
 }
 
