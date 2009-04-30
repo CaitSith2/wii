@@ -136,9 +136,15 @@ static void print_entry(const u8 *entry)
 	gid = be16(entry + 0x1a);
 	x3 = be32(entry + 0x1c);
 
-	print_mode(mode);
-	fprintf(stdout, " %02x %04x %04x %08x (%04x %08x) %s\n",
-	        attr, uid, gid, size, x1, x3, name);
+  if(verbosity_level >= 3)
+  {
+  	print_mode(mode);
+  	fprintf(stdout, " %02x %04x %04x %08x (%04x %08x) ",
+  	        attr, uid, gid, size, x1, x3);
+  }
+  else
+    fprintf(stdout, "    ");
+  fprintf(stdout, "%s\n",name);
 }
 
 static u8 block[0x4000];
@@ -226,15 +232,22 @@ static void do_dir(const u8 *entry, const char *parent_path)
 	name[12] = 0;
 	sub = be16(entry + 0x0e);
 	sib = be16(entry + 0x10);
-
-	if (parent_path[strlen(parent_path) - 1] == '/' || name[0] == '/')
-		sprintf(path, "%s%s", parent_path, name);
-	else
-		sprintf(path, "%s/%s", parent_path, name);
-	fprintf(stdout, "%s:\n", path);
-	if (sub != 0xffff)
-		print_dir_entries(fst + 0x20*sub);
-	fprintf(stdout, "\n");
+  
+  if (parent_path[strlen(parent_path) - 1] == '/' || name[0] == '/')
+  	sprintf(path, "%s%s", parent_path, name);
+  else
+  	sprintf(path, "%s/%s", parent_path, name);
+  if(verbosity_level>1)
+  {
+  	fprintf(stdout, "%s:\n", path);
+  	if (sub != 0xffff)
+  		print_dir_entries(fst + 0x20*sub);
+  	fprintf(stdout, "\n");
+  }
+  else if (verbosity_level==1)
+  {
+    fprintf(stdout, "%s\n", path);
+  }
 
 	if (path[1])
 		mkdir(path + 1, 0777);
@@ -279,7 +292,7 @@ void print_help()
   printf("  --ecc          Verifies ecc data. (Requires --oob)\n");
   printf("  --hmac         Verifies superblock/file hmac (Requires --oob)\n");
   printf("  --out=PATH     Where to store dumped files. Defaults to ./wiiflash/");
-	printf("  --verbose      Increase verbosity, can be specified multiple times\n");
+	printf("  --verbose      Shows file listing, repeat for more details.\n");
 	printf("\n");
 	printf("  --help         Display this help and exit\n");
 	printf("  --version      Print version and exit\n");
