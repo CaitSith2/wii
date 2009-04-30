@@ -133,7 +133,7 @@ static void print_entry(const u8 *entry)
 
 static u8 block[0x4000];
 
-static void do_file(const u8 *entry, const char *parent_path)
+static void do_file(const u8 *entry, const char *parent_path, int entry_num)
 {
 	char name[13];
 	char path[256];
@@ -141,7 +141,9 @@ static void do_file(const u8 *entry, const char *parent_path)
 	u16 sub;
 	u32 size, this_size;
 	FILE *fp;
-  int i;
+  int i,j=0;
+  u8 hmac_block[40];
+  u8 hmac_data[20];
 
 	memcpy(name, entry, 12);
 	name[12] = 0;
@@ -164,6 +166,16 @@ static void do_file(const u8 *entry, const char *parent_path)
       for(i=0;i<8;i++)
       {
         aes_cbc_dec(key, iv, (u8 *)rom + 0x4200*sub + 0x840*i, 0x800, block + 0x800*i);
+      }
+      if(verify_hmac)
+      {
+        memcpy(hmac_block,rom+(0x4200*(sub+1))-0x87F,32);
+        memcpy(hmac_block+32,rom+(0x4200*(sub+1))-0x3F,8);
+        fs_hmac_data(block,be16(entry+0x18),entry,entry_num,be32(entry+0x1C),j++,hmac_data);
+        if(memcmp(hmac_data,hmac_block,20) && memcmp(hmac_data,hmac_block+20,20))
+        {
+          fprintf(stderr,"Warning: Invalid hmac for this file in cluster %d\n",j);
+        }
       }
     }
     else
@@ -236,7 +248,7 @@ static void do_entry(const u8 *entry, const char *parent_path, int entry_num)
 
 	switch(mode) {
 	case 1:
-		do_file(entry, parent_path);
+		do_file(entry, parent_path, entry_num);
 		break;
 	case 2:
 		do_dir(entry, parent_path);
