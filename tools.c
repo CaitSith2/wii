@@ -88,6 +88,26 @@ void get_key(const char *name, u8 *key, u32 len)
 	fclose(fp);
 }
 
+int get_key_optional(const char *name, u8 *key, u32 len)
+{
+	char path[256];
+	char *home;
+	FILE *fp;
+
+	home = getenv("HOME");
+	if (home == 0)
+		return -1;
+	snprintf(path, sizeof path, "%s/.wii/%s", home, name);
+
+	fp = fopen(path, "rb");
+	if (fp == 0)
+		return -2;
+	if (fread(key, len, 1, fp) != 1)
+		return -3;
+	fclose(fp);
+  return 0;
+}
+
 void aes_cbc_dec(u8 *key, u8 *iv, u8 *in, u32 len, u8 *out)
 {
 	AES_KEY aes_key;

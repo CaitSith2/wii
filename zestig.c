@@ -12,6 +12,7 @@
 #include "my_getopt.h"
 #include "ecc.h"
 #include "fs_hmac.h"
+#include "sha1.h"
 
 #define ZESTIG_VERSION_STRING "Zestig v1.1m by CaitSith2, original version by segher\n"
   
@@ -19,6 +20,8 @@ int verbosity_level = 0;
 int out_of_band = 0;
 int verify_ecc = 0;
 int verify_hmac = 0;
+int verify_boot1 = 0;
+int otp_used = 0;
   
 static const u8 *rom;
 static const u8 *super;
@@ -26,9 +29,89 @@ static u8 superblock[0x40000];
 static const u8 *fat;
 static const u8 *fst;
 
+static u8 hash[20];
+static u32 console_id;
 static u8 key[16];
 static u8 hmac[20];
 
+static const u8 boot1hash_table[3][20] = {
+  { 0xB3, 0x0C, 0x32, 0xB9, 0x62, 0xC7, 0xCD, 0x08, 0xAB, 0xE3, 0x3D, 0x01, 0x5B, 0x9B, 0x8B, 0x1D, 0xB1, 0x09, 0x75, 0x44 }, //4A7C...
+  { 0xEF, 0x3E, 0xF7, 0x81, 0x09, 0x60, 0x8D, 0x56, 0xDF, 0x56, 0x79, 0xA6, 0xF9, 0x2E, 0x13, 0xF7, 0x8B, 0xBD, 0xDF, 0xDF }, //2CCD...
+  { 0xD2, 0x20, 0xC8, 0xA4, 0x86, 0xC6, 0x31, 0xD0, 0xDF, 0x5A, 0xDB, 0x31, 0x96, 0xEC, 0xBC, 0x66, 0x87, 0x80, 0xCC, 0x8D }  //F01E...
+};
+
+static u8 boot1key[16] = {0x92, 0x58, 0xA7, 0x52, 0x64, 0x96, 0x0D, 0x82, 0x67, 0x6F, 0x90, 0x44, 0x56, 0x88, 0x2A, 0x73};
+static u8 boot1iv[16] = { 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0 };
+
+static const u32 console_ids[2] = { 0x021DFFFF, 0x06000000 };
+
+static int verify_boot1_hash(u32 id)
+{
+  int i;
+  static SHA1Context boothash;
+  u8 boot1contents[0x800];
+  u8 boot1hash[20];
+
+  SHA1Reset(&boothash);
+  for(i=0;i<47;i++)
+  {
+    aes_cbc_dec(boot1key, boot1iv, (u8 *)rom + 0x840*i, 0x800, boot1contents);
+    SHA1Input(&boothash,boot1contents,0x800);
+  }
+  for(i=0;i<5;i++)
+    wbe32(boot1hash + (i*4),boothash.Message_Digest[i]);
+  if(otp_used)
+  {
+    if(memcmp(hash,boot1hash,20))
+    {
+      for(i=0;i<20;i++)
+      {
+        if(hash[i])
+          return 0;
+      }   //A hash of ALL 00 in the otp memory means the wii will boot no matter what boot1 is present.
+      return 1;
+    }
+    else
+      return 1;
+  }
+  else
+  {
+    if(id == 0xFFFFFFFF)
+    {
+      for(i=0;i<3;i++)
+      {
+        if(!memcmp(boot1hash,boot1hash_table[i],20))
+          break;
+      }
+      if(i<3)
+        return 1;
+      else
+        return 0;
+    }
+    else if(id <= console_ids[0])
+    {
+      if(memcmp(boot1hash,boot1hash_table[0],20))
+        return 0;
+      else
+        return 1;
+    }
+    else if((id > console_ids[0]) && (id < console_ids[1]))
+    {
+      if(memcmp(boot1hash,boot1hash_table[1],20))
+        return 0;
+      else
+        return 1;
+    }
+    else
+    {
+      if(memcmp(boot1hash,boot1hash_table[2],20))
+        return 0;
+      else
+        return 1;
+    }
+  }
+  return 0;
+}
 
 static const u8 *map_rom(const char *name)
 {
@@ -291,6 +374,7 @@ void print_help()
   printf("  --oob          Use out of band (extra data) if it exists\n");
   printf("  --ecc          Verifies ecc data. (Requires --oob)\n");
   printf("  --hmac         Verifies superblock/file hmac (Requires --oob)\n");
+  printf("  --boot1        Verifies boot1 hash\n");
   printf("  --out=PATH     Where to store dumped files. Defaults to ./wiiflash/");
 	printf("  --verbose      Shows file listing, repeat for more details.\n");
 	printf("\n");
@@ -313,6 +397,7 @@ int main(int argc, char **argv)
 		{ "version", no_argument, 0, 'V' },
     { "ecc", no_argument, 0, 'E' },
     { "hmac", no_argument, 0, 'H' },
+    { "boot1", no_argument, 0, 'b' },
 		{ "name", required_argument, 0, 'n' },
     { "oob", no_argument, 0, 'o' },
 		{ "otp", required_argument, 0, 'O' },
@@ -367,6 +452,9 @@ int main(int argc, char **argv)
       case 'H':
         verify_hmac = 1;
         break;
+      case 'b':
+        verify_boot1 = 1;
+        break;
 			case 1:
         rom = map_rom(my_optarg);
 				break;
@@ -379,8 +467,11 @@ int main(int argc, char **argv)
   }
   if(nandotp)
   {
+    memcpy(hash,rom+0x21000100,20);
+    memcpy(&console_id,rom+0x21000124,4);
     memcpy(key,rom+0x21000158,16);
     memcpy(hmac,rom+0x21000144,20);  //Why not, its already here.
+    otp_used = 1;
   }
   else if(otp[0] != 0)
   {
@@ -391,8 +482,11 @@ int main(int argc, char **argv)
     if(otpdata==NULL)
       fatal("Could not allocate memory for otp file %s",otp);
     close(fd);
+    memcpy(hash,otpdata+0x24,20);
+    memcpy(&console_id,otpdata,4);
     memcpy(key,otpdata+0x58,16);
     memcpy(hmac,otpdata+0x44,20);  //Why not, its already here.
+    otp_used = 1;
   }
   else if(wiiname[0]!=0)
   {
@@ -403,12 +497,23 @@ int main(int argc, char **argv)
       sprintf(path,"%s/nand-hmac",wiiname);
       get_key(path, hmac, 20);
     }
+    if(verify_boot1)
+    {
+      sprintf(path,"%s/NG-id",wiiname);
+      if(get_key_optional(path, (u8*)&console_id, 4))
+        console_id = 0xFFFFFFFF;
+    }
   }
   else
   {
     get_key("default/nand-key", key, 16);
     if(verify_hmac)
       get_key("default/nand-hmac", hmac, 20);
+    if(verify_boot1)
+    {
+      if(get_key_optional("default/NG-id", (u8*)&console_id, 4))
+        console_id = 0xFFFFFFFF;
+    }
   }
 	
   if(verify_ecc)
@@ -440,7 +545,22 @@ int main(int argc, char **argv)
       verify_hmac=0;
     }
     else
+    {
+      fprintf(stderr,"Verifying superblock/file hmac\n");
       fs_hmac_set_key(hmac,20);
+    }
+  }
+  if(verify_boot1)
+  {
+    fprintf(stderr,"Verifying boot1");
+    if(console_id < 0xFFFFFFFF)
+      fprintf(stderr," for console ID 0x%X: ",be32((u8*)&console_id));
+    else
+      fprintf(stderr,", console ID unknown: ");
+    if(!verify_boot1_hash(be32((u8*)&console_id)))
+      fprintf(stderr,"Invalid\n");
+    else
+      fprintf(stderr,"OK\n");
   }
   
 	super = find_super();
@@ -448,9 +568,18 @@ int main(int argc, char **argv)
   {
     printf("No valid superblocks found\n");
     if(out_of_band)
-      printf("Try removing --oob from options\n");
+    {
+      if(verify_hmac)
+      {
+        printf("  Your hmac key is most likely invalid.\n  Try removing --hmac from options\n");
+      }
+      else
+      {
+        printf("  Try removing --oob from options\n");
+      }
+    }
     else
-      printf("Try adding --oob to options\n");
+      printf("  Try adding --oob to options\n");
     exit(1);
   }
   if(out_of_band)

@@ -35,6 +35,7 @@ void bn_exp(u8 *d, u8 *a, u8 *N, u32 n, u8 *e, u32 en);
 void md5(u8 *data, u32 len, u8 *hash);
 void sha(u8 *data, u32 len, u8 *hash);
 void get_key(const char *name, u8 *key, u32 len);
+int get_key_optional(const char *name, u8 *key, u32 len);
 void aes_cbc_dec(u8 *key, u8 *iv, u8 *in, u32 len, u8 *out);
 void aes_cbc_enc(u8 *key, u8 *iv, u8 *in, u32 len, u8 *out);
 void decrypt_title_key(u8 *tik, u8 *title_key);
