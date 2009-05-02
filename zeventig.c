@@ -56,7 +56,7 @@ static void do_app_file(u8 *app, u32 app_len, u8 *tik, u8 *tmd)
 	u8 title_key[16];
 	u8 iv[16];
 	u32 i;
-	u8 *p;
+	u8 *p, *q;
 	u32 len;
 	u32 rounded_len;
 	u32 num_contents;
@@ -76,6 +76,7 @@ static void do_app_file(u8 *app, u32 app_len, u8 *tik, u8 *tmd)
 
 	num_contents = be16(tmd + 0x01de);
 	p = app;
+  q = app + app_len;
 
 	for (i = 0; i < num_contents; i++) {
 		cid = be32(tmd + 0x01e4 + 0x24*i);
@@ -99,6 +100,8 @@ static void do_app_file(u8 *app, u32 app_len, u8 *tik, u8 *tmd)
 		fclose(fp);
 
 		p += rounded_len;
+    if(p > q)
+      fatal("app_len failure");
 	}
 
 	if (chdir(".."))
