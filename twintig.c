@@ -41,7 +41,7 @@ static u32 files_size;
 
 static u8 files[MAXFILES][0x80];
 
-static void read_image(u8 *data, u32 w, u32 h, const char *name)
+static int read_image(u8 *data, u32 w, u32 h, const char *name)
 {
 	FILE *fp;
 	u32 x, y;
@@ -49,7 +49,7 @@ static void read_image(u8 *data, u32 w, u32 h, const char *name)
 
 	fp = fopen(name, "rb");
 	if (!fp)
-		fatal("open %s", name);
+    return -1;
 
 	if (fscanf(fp, "P6 %d %d 255\n", &ww, &hh) != 2)
 		ERROR("bad ppm");
@@ -80,6 +80,7 @@ static void read_image(u8 *data, u32 w, u32 h, const char *name)
 		}
 
 	fclose(fp);
+  return 0;
 }
 
 static u8 perm_from_path(const char *path)
@@ -128,20 +129,28 @@ static void do_file_header(u64 title_id)
 		fatal("read ###title###");
 	fclose(in);
 
-	read_image(header + 0xc0, 192, 64, "###banner###.ppm");
+	if(read_image(header + 0xc0, 192, 64, "###banner###.ppm"))
+    fatal("open %s", "###bannr###.ppm"); 
 
 	in = fopen("###icon###.ppm", "rb");
 	if (in) {
 		fclose(in);
 		wbe32(header + 8, 0x72a0);
-		read_image(header + 0x60c0, 48, 48, "###icon###.ppm");
+		if(read_image(header + 0x60c0, 48, 48, "###icon###.ppm"))
+      fatal("open %s", "###icon###.ppm"); 
 	} else {
-		wbe32(header + 8, 0xf0a0);
 
 		for (i = 0; i < 8; i++) {
 			snprintf(name, sizeof name, "###icon%d###.ppm", i);
-			read_image(header + 0x60c0 + 0x1200*i, 48, 48, name);
+			if(read_image(header + 0x60c0 + 0x1200*i, 48, 48, name))
+      {
+        if(i==0)
+          fatal("open %s", "###icon0###.ppm");
+        else 
+          break;
+      }
 		}
+    wbe32(header + 8, 0x60A0 + (i * 0x1200));
 	}
 
 	md5(header, sizeof header, md5_calc);
@@ -398,24 +407,27 @@ int main(int argc, char **argv)
 {
 	u64 title_id;
 	u8 tmp[4];
+  char wiiname[256] = "default";
 	u32 i;
 
-	if (argc != 3) {
-		fprintf(stderr, "Usage: %s <srcdir> <data.bin>\n", argv[0]);
+	if (argc < 3) {
+		fprintf(stderr, "Usage: %s <srcdir> <data.bin> [wii_key_name]\n", argv[0]);
 		return 1;
 	}
+  if(argc > 3)
+    snprintf(wiiname, sizeof wiiname, "%s", argv[3]);
 
 	get_key("sd-key", sd_key, 16);
 	get_key("sd-iv", sd_iv, 16);
 	get_key("md5-blanker", md5_blanker, 16);
 
-	get_key("default/NG-id", tmp, 4);
+  get_wii_key(wiiname,"NG-id", tmp, 4, 0);
 	ng_id = be32(tmp);
-	get_key("default/NG-key-id", tmp, 4);
+  get_wii_key(wiiname,"NG-key-id", tmp, 4, 0);
 	ng_key_id = be32(tmp);
-	get_key("default/NG-mac", ng_mac, 6);
-	get_key("default/NG-priv", ng_priv, 30);
-	get_key("default/NG-sig", ng_sig, 60);
+  get_wii_key(wiiname,"NG-mac", ng_mac, 6, 0);
+  get_wii_key(wiiname,"NG-priv", ng_priv, 30, 0);
+  get_wii_key(wiiname,"NG-sig", ng_sig, 60, 0);
 
 	if (sscanf(argv[1], "%016llx", &title_id) != 1)
 		ERROR("not a correct title id");
