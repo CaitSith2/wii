@@ -199,6 +199,7 @@ int main(int argc, char **argv)
     fprintf(stderr,"Use like this: %s <wad file>\n",argv[0]);
     return 1;
   }
+  
 	fp = fopen(argv[1], "rb");
   if(fp==NULL)
     fatal("Could not open file %s",argv[1]);
