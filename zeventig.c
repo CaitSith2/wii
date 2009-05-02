@@ -191,8 +191,14 @@ hexdump(header, header_len);
 
 int main(int argc, char **argv)
 {
+  if(argc<2)
+  {
+    fprintf(stderr,"Use like this: %s <wad file>\n",argv[0]);
+    return 1;
+  }
 	fp = fopen(argv[1], "rb");
-
+  if(fp==NULL)
+    fatal("Could not open file %s",argv[1]);
 	while (!feof(fp))
 		do_wad();
 
