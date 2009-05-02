@@ -385,7 +385,7 @@ void print_help()
 int main(int argc, char **argv)
 {
   char path[256];
-  char wiiname[256] = {0};
+  char wiiname[256] = "default";
   char otp[256] = {0};
   char nanddump[256] = {0};
   char nandotp = 0;
@@ -488,32 +488,14 @@ int main(int argc, char **argv)
     memcpy(hmac,otpdata+0x44,20);  //Why not, its already here.
     otp_used = 1;
   }
-  else if(wiiname[0]!=0)
-  {
-    sprintf(path,"%s/nand-key",wiiname);
-    get_key(path, key, 16);
-    if(verify_hmac)
-    {
-      sprintf(path,"%s/nand-hmac",wiiname);
-      get_key(path, hmac, 20);
-    }
-    if(verify_boot1)
-    {
-      sprintf(path,"%s/NG-id",wiiname);
-      if(get_key_optional(path, (u8*)&console_id, 4))
-        console_id = 0xFFFFFFFF;
-    }
-  }
   else
   {
-    get_key("default/nand-key", key, 16);
+    get_wii_key(wiiname,"nand-key",key,16,0);
     if(verify_hmac)
-      get_key("default/nand-hmac", hmac, 20);
+      get_wii_key(wiiname,"nand-hmac",hmac,20,0);
     if(verify_boot1)
-    {
-      if(get_key_optional("default/NG-id", (u8*)&console_id, 4))
+      if(get_wii_key(wiiname,"NG-id",(u8*)&console_id,4,1))
         console_id = 0xFFFFFFFF;
-    }
   }
 	
   if(verify_ecc)

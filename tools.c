@@ -69,6 +69,22 @@ void sha(u8 *data, u32 len, u8 *hash)
 	SHA1(data, len, hash);
 }
 
+int get_wii_key(const char *wiiname, const char *keyname, u8 *key, u32 len, int optional)
+{
+  char name[256];
+  if(wiiname==NULL)
+    snprintf(name, sizeof name, "default/%s", keyname);
+  else if (wiiname[0] == 0)
+    snprintf(name, sizeof name, "default/%s", keyname);
+  else
+    snprintf(name, sizeof name, "%s/%s", wiiname, keyname);
+  if(optional)
+    return get_key_optional(name, key, len);
+  else
+    get_key(name, key, len);
+  return 0;
+}
+
 void get_key(const char *name, u8 *key, u32 len)
 {
 	char path[256];
