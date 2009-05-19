@@ -22,6 +22,7 @@ int verify_ecc = 0;
 int verify_hmac = 0;
 int verify_boot1 = 0;
 int otp_used = 0;
+int force_old_sffs = 0;
   
 static const u8 *rom;
 static const u8 *super;
@@ -142,7 +143,7 @@ static const u8 *find_super(void)
   int start = 0x1fc00000;
   int end = 0x20000000;
   int add = 0x40000;
-  int i,j;
+  int i,j,old=0;
   u8 block_hmac[40];
   u8 hmac_super[20];
   
@@ -152,7 +153,7 @@ static const u8 *find_super(void)
     end = 0x21000000;
     add = 0x42000;
   }
-
+  
 	for (p = rom + start,j=0; p < rom + end; p += add,j++)
 		if (be32(p) == 0x53464653) {
 			u32 version = be32(p + 4);
@@ -177,10 +178,26 @@ static const u8 *find_super(void)
           else
             fprintf(stdout,"Super block %d OK\n",j);
         }
+        old = j;
 				super = p;
 				newest = version;
 			}
 		}
+    if(force_old_sffs)
+    {
+      old -= force_old_sffs;
+      if(old < 0)
+        old += 16;
+      super = rom + start + (add * old);
+      if(out_of_band)
+      {
+        for(i=0;i<128;i++)
+        {
+          memcpy(superblock+(i*2048),super+(i*2112),2048);
+        }
+      }
+      fprintf(stdout, "Forcing use of Super block %d\n",old);
+    }
 	return super;
 }
 
@@ -375,6 +392,8 @@ void print_help()
   printf("  --ecc          Verifies ecc data. (Requires --oob)\n");
   printf("  --hmac         Verifies superblock/file hmac (Requires --oob)\n");
   printf("  --boot1        Verifies boot1 hash\n");
+  printf("  --sffs=NUM     Force use of previous by NUM sffs.  (If block NUM=1 and block 4 is being");
+  printf("                 extracted, extract block 3 instead)\n");
   printf("  --out=PATH     Where to store dumped files. Defaults to ./wiiflash/");
 	printf("  --verbose      Shows file listing, repeat for more details.\n");
 	printf("\n");
@@ -398,6 +417,7 @@ int main(int argc, char **argv)
     { "ecc", no_argument, 0, 'E' },
     { "hmac", no_argument, 0, 'H' },
     { "boot1", no_argument, 0, 'b' },
+    { "sffs", required_argument, 0, 's' },
 		{ "name", required_argument, 0, 'n' },
     { "oob", no_argument, 0, 'o' },
 		{ "otp", required_argument, 0, 'O' },
@@ -454,6 +474,9 @@ int main(int argc, char **argv)
         break;
       case 'b':
         verify_boot1 = 1;
+        break;
+      case 's':
+        force_old_sffs = atoi(my_optarg);
         break;
 			case 1:
         rom = map_rom(my_optarg);
